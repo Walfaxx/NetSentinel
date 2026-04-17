@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>NetSentinel — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ======================================================
+       BARRE DU HAUT
+  ====================================================== -->
+  <header>
+    <div class="header-logo">
+      <svg width="28" height="28" viewBox="0 0 48 48" fill="none">
+        <polygon points="24,3 45,14 45,34 24,45 3,34 3,14"
+                 stroke="#00e5ff" stroke-width="2" fill="none" opacity=".5"/>
+        <circle cx="24" cy="24" r="6" fill="#00e5ff"/>
+      </svg>
+      <span class="header-title">NetSentinel</span>
+      <span class="header-sub">SPARFLEX</span>
+    </div>
+    <div class="header-right">
+      <span id="horloge"></span>
+      <button class="btn-outline" onclick="seDeconnecter()">Déconnexion</button>
+    </div>
+  </header>
+
+  <!-- ======================================================
+       NAVIGATION
+  ====================================================== -->
+  <nav>
+    <button class="tab active" onclick="afficherOnglet('dashboard', this)">Dashboard</button>
+    <button class="tab" onclick="afficherOnglet('appareils', this)">
+      Appareils <span class="badge" id="badge-appareils" style="display:none">0</span>
+    </button>
+    <button class="tab" onclick="afficherOnglet('alertes', this)">
+      Alertes <span class="badge badge-rouge" id="badge-alertes" style="display:none">0</span>
+    </button>
+    <button class="tab" onclick="afficherOnglet('sondes', this)">Sondes</button>
+    <button class="tab" onclick="afficherOnglet('parametres', this)">Paramètres</button>
+  </nav>
+
+  <!-- ======================================================
+       ONGLET : DASHBOARD
+  ====================================================== -->
+  <section id="onglet-dashboard" class="onglet active">
+
+    <div class="cards">
+      <div class="card card-blue">
+        <div class="card-label">Appareils détectés</div>
+        <div class="card-value" id="nb-appareils">–</div>
+      </div>
+      <div class="card card-rouge">
+        <div class="card-label">Alertes</div>
+        <div class="card-value" id="nb-alertes">–</div>
+      </div>
+      <div class="card card-green">
+        <div class="card-label">Sondes configurées</div>
+        <div class="card-value" id="nb-sondes">–</div>
+      </div>
+      <div class="card card-orange">
+        <div class="card-label">Dernière alerte</div>
+        <div class="card-value small" id="derniere-alerte">–</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-titre">Dernières alertes</div>
+      <div id="dash-alertes"><div class="chargement">Chargement…</div></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-titre">Derniers appareils détectés</div>
+      <div id="dash-appareils"><div class="chargement">Chargement…</div></div>
+    </div>
+
+  </section>
+
+  <!-- ======================================================
+       ONGLET : APPAREILS
+  ====================================================== -->
+  <section id="onglet-appareils" class="onglet">
+
+    <div class="panel">
+      <div class="panel-titre">
+        Inventaire réseau
+        <button class="btn-outline" onclick="chargerAppareils()">↻ Actualiser</button>
+      </div>
+      <div id="table-appareils"><div class="chargement">Chargement…</div></div>
+    </div>
+
+  </section>
+
+  <!-- ======================================================
+       ONGLET : ALERTES
+  ====================================================== -->
+  <section id="onglet-alertes" class="onglet">
+
+    <div class="panel">
+      <div class="panel-titre">
+        Journal des alertes
+        <div style="display:flex;gap:8px;">
+          <button class="btn-outline" onclick="chargerAlertes()">↻ Actualiser</button>
+          <button class="btn-danger"  onclick="viderAlertes()">🗑 Vider les alertes</button>
+        </div>
+      </div>
+      <div id="liste-alertes"><div class="chargement">Chargement…</div></div>
+    </div>
+
+  </section>
+
+  <!-- ======================================================
+       ONGLET : SONDES
+  ====================================================== -->
+  <section id="onglet-sondes" class="onglet">
+
+    <!-- Contrôle ESP32 -->
+    <div class="panel" style="border-top:4px solid #00e5ff;">
+      <div class="panel-titre">📡 Contrôle de la sonde ESP32</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;padding:15px;">
+
+        <!-- Config WiFi -->
+        <div class="formulaire" style="flex-direction:column;gap:10px;background:#1a1a1a;padding:15px;border-radius:8px;">
+          <h4 style="margin:0;color:#cdd9e5;">1. Configuration WiFi</h4>
+          <p style="font-size:0.8em;color:#8ba4bf;margin:0;">Envoie les accès WiFi à l'ESP32 via USB.</p>
+          <input type="text"     id="wifi-ssid" placeholder="Nom du WiFi (SSID)">
+          <input type="password" id="wifi-pass" placeholder="Mot de passe WiFi">
+          <button class="btn-primary" onclick="configSondeWifi()">Enregistrer dans l'ESP32</button>
+          <div id="msg-wifi" style="font-size:0.85em;display:none;"></div>
+        </div>
+
+        <!-- Lancer scan -->
+        <div class="formulaire" style="flex-direction:column;gap:10px;background:#1a1a1a;padding:15px;border-radius:8px;">
+          <h4 style="margin:0;color:#cdd9e5;">2. Lancer un scan</h4>
+          <p style="font-size:0.8em;color:#8ba4bf;margin:0;">L'ESP32 pingue la plage et remplit la table Appareils.</p>
+          <input type="text" id="scan-range" placeholder="Ex : 192.168.1.1-192.168.1.50">
+          <button class="btn-primary" id="btn-scan" onclick="lancerScanESP()">Démarrer le scan réseau</button>
+          <div id="msg-scan" style="font-size:0.85em;display:none;"></div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Sondes Raspberry Pi -->
+    <div class="panel">
+      <div class="panel-titre">
+        Sondes Raspberry Pi
+        <button class="btn-primary" onclick="toggleForm('form-sonde')">+ Ajouter une sonde</button>
+      </div>
+
+      <div id="form-sonde" class="formulaire" style="display:none;">
+        <input type="text" id="sonde-nom"  placeholder="Nom (ex : RPI-SPARFLEX-01)">
+        <input type="text" id="sonde-lieu" placeholder="Emplacement (ex : Salle serveurs)">
+        <input type="text" id="sonde-ip"   placeholder="Adresse IP (ex : 192.168.1.100)">
+        <button class="btn-primary" onclick="ajouterSonde()">Enregistrer</button>
+        <button class="btn-outline"  onclick="toggleForm('form-sonde')">Annuler</button>
+      </div>
+
+      <div id="table-sondes"><div class="chargement">Chargement…</div></div>
+    </div>
+
+  </section>
+
+  <!-- ======================================================
+       ONGLET : PARAMÈTRES
+  ====================================================== -->
+  <section id="onglet-parametres" class="onglet">
+
+    <div class="panel">
+      <div class="panel-titre">Informations du projet</div>
+      <table class="table-infos">
+        <tr><td>Projet</td><td>NetSentinel</td></tr>
+        <tr><td>Client</td><td>SPARFLEX — Dizy (51530)</td></tr>
+        <tr><td>Développeur</td><td>VIENNE Louis</td></tr>
+        <tr><td>Formation</td><td>BTS CIEL — Option IR — Session 2026</td></tr>
+        <tr><td>Serveur</td><td>Apache2 + Python CGI</td></tr>
+        <tr><td>Base de données</td><td>SQLite (netsentinel.db)</td></tr>
+      </table>
+    </div>
+
+    <div class="panel">
+      <div class="panel-titre">
+        Comptes utilisateurs
+        <button class="btn-primary" onclick="toggleForm('form-user')">+ Ajouter</button>
+      </div>
+
+      <div id="form-user" class="formulaire" style="display:none;">
+        <input type="text"     id="new-username" placeholder="Identifiant" autocomplete="off">
+        <input type="password" id="new-password" placeholder="Mot de passe (min 8 caractères)">
+        <button class="btn-primary" onclick="ajouterUtilisateur()">Créer le compte</button>
+        <button class="btn-outline"  onclick="toggleForm('form-user')">Annuler</button>
+      </div>
+
+      <div id="table-users"><div class="chargement">Chargement…</div></div>
+    </div>
+
+  </section>
+
+
+  <!-- ======================================================
+       JAVASCRIPT
+  ====================================================== -->
+  <script>
+
+    // ── Horloge ──────────────────────────────────────────────
+    function majHorloge() {
+      document.getElementById("horloge").textContent =
+        new Date().toLocaleTimeString("fr-FR");
+    }
+    setInterval(majHorloge, 1000);
+    majHorloge();
+
+
+    // ── URL de base de l'API ──────────────────────────────────
+    var API = window.location.origin + "/netsentinel/cgi-bin/api.py";
+
+
+    // ── Appel générique à l'API ───────────────────────────────
+    // CORRECTION BUG : on remplace le "?" des paramètres supplémentaires
+    // par "&" pour ne pas casser l'URL construite.
+    // Exemple : api("alertes?limit=5")
+    //   → construit : /api.py?action=alertes&limit=5  ✅
+    //   → avant fix  : /api.py?action=alertes?limit=5  ❌
+    async function api(action, methode, donnees) {
+      methode = methode || "GET";
+      var options = {
+        method:  methode,
+        headers: { "Content-Type": "application/json" }
+      };
+      if (donnees) options.body = JSON.stringify(donnees);
+
+      // Sépare l'action des paramètres éventuels
+      var base  = action;
+      var extra = "";
+      if (action.indexOf("?") !== -1) {
+        var parts = action.split("?");
+        base  = parts[0];
+        extra = "&" + parts[1];
+      }
+
+      var url = API + "?action=" + base + extra;
+
+      try {
+        var r = await fetch(url, options);
+        if (r.status === 401) {
+          window.location = window.location.origin + "/netsentinel/login.html";
+          return null;
+        }
+        return r.json();
+      } catch (e) {
+        console.error("Erreur API (" + action + ") :", e);
+        return null;
+      }
+    }
+
+
+    // ── Navigation par onglets ────────────────────────────────
+    var chargeurs = {
+      dashboard:  chargerDashboard,
+      appareils:  chargerAppareils,
+      alertes:    chargerAlertes,
+      sondes:     chargerSondes,
+      parametres: chargerUtilisateurs,
+    };
+
+    function afficherOnglet(nom, bouton) {
+      document.querySelectorAll(".onglet").forEach(function(o) { o.classList.remove("active"); });
+      document.querySelectorAll(".tab").forEach(function(b)   { b.classList.remove("active"); });
+      document.getElementById("onglet-" + nom).classList.add("active");
+      bouton.classList.add("active");
+      if (chargeurs[nom]) chargeurs[nom]();
+    }
+
+    function toggleForm(id) {
+      var f = document.getElementById(id);
+      f.style.display = (f.style.display === "none" || f.style.display === "") ? "flex" : "none";
+    }
+
+
+    // ── DASHBOARD ─────────────────────────────────────────────
+    async function chargerDashboard() {
+      var d = await api("dashboard");
+      if (!d) return;
+
+      document.getElementById("nb-appareils").textContent    = d.appareils;
+      document.getElementById("nb-alertes").textContent      = d.alertes;
+      document.getElementById("nb-sondes").textContent       = d.sondes;
+      document.getElementById("derniere-alerte").textContent =
+        d.derniere_alerte
+          ? new Date(d.derniere_alerte).toLocaleString("fr-FR")
+          : "Aucune";
+
+      majBadge("badge-appareils", d.appareils);
+      majBadge("badge-alertes",   d.alertes);
+
+      chargerAlertesPreview();
+      chargerAppareilsPreview();
+    }
+
+    function majBadge(id, n) {
+      var el = document.getElementById(id);
+      if (n > 0) { el.textContent = n; el.style.display = "inline"; }
+      else        { el.style.display = "none"; }
+    }
+
+    async function chargerAlertesPreview() {
+      var alertes = await api("alertes?limit=5");
+      document.getElementById("dash-alertes").innerHTML =
+        alertes && alertes.length
+          ? alertes.map(htmlAlerte).join("")
+          : "<p class='vide'>Aucune alerte.</p>";
+    }
+
+    async function chargerAppareilsPreview() {
+      var appareils = await api("appareils");
+      var wrap = document.getElementById("dash-appareils");
+      if (!appareils || !appareils.length) {
+        wrap.innerHTML = "<p class='vide'>Aucun appareil détecté. Lancez un scan depuis l'onglet Sondes.</p>";
+        return;
+      }
+      wrap.innerHTML =
+        "<table><thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Statut</th></tr></thead><tbody>" +
+        appareils.slice(0, 5).map(function(a) {
+          return "<tr>" +
+            "<td>" + (a.hostname || "Inconnu") + "</td>" +
+            "<td class='mono'>" + (a.ip_address  || "–") + "</td>" +
+            "<td class='mono'>" + (a.mac_address || "–") + "</td>" +
+            "<td>" + htmlStatut(a.allowed) + "</td>" +
+            "</tr>";
+        }).join("") +
+        "</tbody></table>";
+    }
+
+
+    // ── APPAREILS ─────────────────────────────────────────────
+    async function chargerAppareils() {
+      var appareils = await api("appareils");
+      var wrap = document.getElementById("table-appareils");
+
+      if (!appareils || !appareils.length) {
+        wrap.innerHTML = "<p class='vide'>Aucun appareil en base. Lancez un scan depuis l'onglet Sondes.</p>";
+        return;
+      }
+
+      wrap.innerHTML =
+        "<table><thead><tr><th>Hostname</th><th>Adresse IP</th><th>Adresse MAC</th><th>Statut</th><th>Actions</th></tr></thead><tbody>" +
+        appareils.map(function(a) {
+          return "<tr>" +
+            "<td><strong>" + (a.hostname || "Inconnu") + "</strong></td>" +
+            "<td class='mono'>" + (a.ip_address  || "–") + "</td>" +
+            "<td class='mono'>" + (a.mac_address || "–") + "</td>" +
+            "<td>" + htmlStatut(a.allowed) + "</td>" +
+            "<td>" +
+              "<button onclick='changerStatut(" + a.id_device + ", " + (a.allowed === 1 ? 0 : 1) + ")'>" +
+                (a.allowed === 1 ? "Révoquer" : "Autoriser") +
+              "</button> " +
+              "<button onclick='supprimerAppareil(" + a.id_device + ")'>Supprimer</button>" +
+            "</td>" +
+            "</tr>";
+        }).join("") +
+        "</tbody></table>";
+    }
+
+    function htmlStatut(val) {
+      if (val ===  1) return "<span class='badge-ok'>Autorisé</span>";
+      if (val === -1) return "<span class='badge-err'>Bloqué</span>";
+      return "<span class='badge-warn'>Inconnu</span>";
+    }
+
+    async function changerStatut(id, allowed) {
+      await api("appareils", "POST", { id: id, allowed: allowed });
+      chargerAppareils();
+    }
+
+    async function supprimerAppareil(id) {
+      if (!confirm("Supprimer cet appareil de la base ?")) return;
+      await api("appareils", "DELETE", { id: id });
+      chargerAppareils();
+      chargerDashboard();
+    }
+
+
+    // ── ALERTES ───────────────────────────────────────────────
+    async function chargerAlertes() {
+      var alertes = await api("alertes");
+      var wrap = document.getElementById("liste-alertes");
+      wrap.innerHTML = (alertes && alertes.length)
+        ? alertes.map(htmlAlerte).join("")
+        : "<p class='vide'>Aucune alerte. Le réseau est calme.</p>";
+    }
+
+    function htmlAlerte(a) {
+      var critique = (a.message || "").includes("INTRUSION");
+      return "<div class='alerte " + (critique ? "alerte-critique" : "alerte-warning") + "'>" +
+        "<span>" + (critique ? "🚨 " : "⚠️ ") + (a.message || "") + "</span>" +
+        "<span class='alerte-date'>" + new Date(a.date).toLocaleString("fr-FR") + "</span>" +
+        "</div>";
+    }
+
+    async function viderAlertes() {
+      if (!confirm("Vider toutes les alertes ?")) return;
+      await api("alertes", "DELETE");
+      chargerAlertes();
+      chargerDashboard();
+    }
+
+
+    // ── SONDES & ESP32 ────────────────────────────────────────
+    async function chargerSondes() {
+      var sondes = await api("sondes");
+      var wrap = document.getElementById("table-sondes");
+
+      if (!sondes || !sondes.length) {
+        wrap.innerHTML = "<p class='vide'>Aucune sonde enregistrée.</p>";
+        return;
+      }
+
+      wrap.innerHTML =
+        "<table><thead><tr><th>Nom</th><th>Emplacement</th><th>IP</th><th>Action</th></tr></thead><tbody>" +
+        sondes.map(function(s) {
+          return "<tr>" +
+            "<td><strong>" + s.name + "</strong></td>" +
+            "<td>" + (s.place || "–") + "</td>" +
+            "<td class='mono'>" + (s.ip_address || "–") + "</td>" +
+            "<td><button onclick='supprimerSonde(" + s.id_probe + ")'>Supprimer</button></td>" +
+            "</tr>";
+        }).join("") +
+        "</tbody></table>";
+    }
+
+    async function configSondeWifi() {
+      var ssid = document.getElementById("wifi-ssid").value.trim();
+      var pass = document.getElementById("wifi-pass").value.trim();
+
+      if (!ssid || !pass) {
+        afficherMsg("msg-wifi", "Remplis les deux champs.", "rouge");
+        return;
+      }
+
+      afficherMsg("msg-wifi", "Envoi en cours…", "neutre");
+      var r = await api("config_wifi", "POST", { ssid: ssid, password: pass });
+
+      if (r && r.ok) {
+        afficherMsg("msg-wifi", "✅ Configuration WiFi envoyée à l'ESP32 !", "vert");
+      } else {
+        afficherMsg("msg-wifi", "❌ Erreur : " + (r ? r.error : "Vérifiez le branchement USB."), "rouge");
+      }
+    }
+
+    async function lancerScanESP() {
+      var rge = document.getElementById("scan-range").value.trim();
+      var btn = document.getElementById("btn-scan");
+
+      // Validation du format attendu : 192.168.1.1-192.168.1.50
+      if (!rge || rge.indexOf("-") === -1) {
+        afficherMsg("msg-scan", "❌ Format requis : 192.168.1.1-192.168.1.50", "rouge");
+        return;
+      }
+
+      // Désactiver le bouton pendant l'envoi
+      btn.disabled    = true;
+      btn.textContent = "Envoi en cours…";
+      afficherMsg("msg-scan", "Envoi de l'ordre de scan à l'ESP32…", "neutre");
+
+      var r = await api("start_scan", "POST", { range: rge });
+
+      btn.disabled    = false;
+      btn.textContent = "Démarrer le scan réseau";
+
+      if (r && r.ok) {
+        afficherMsg("msg-scan", "✅ Scan lancé ! Résultats dans l'onglet Appareils dans quelques instants.", "vert");
+      } else {
+        afficherMsg("msg-scan", "❌ Erreur : " + (r ? r.error : "Impossible de contacter le serveur."), "rouge");
+      }
+    }
+
+    // Affiche un message coloré sous un formulaire
+    function afficherMsg(id, texte, couleur) {
+      var el          = document.getElementById(id);
+      el.textContent  = texte;
+      el.style.display = "block";
+      el.style.color  = couleur === "vert"   ? "#00ff88"
+                      : couleur === "rouge"  ? "#ff3d71"
+                      : "#8ba4bf";
+    }
+
+    async function ajouterSonde() {
+      var nom  = document.getElementById("sonde-nom").value.trim();
+      var lieu = document.getElementById("sonde-lieu").value.trim();
+      var ip   = document.getElementById("sonde-ip").value.trim();
+
+      if (!nom || !ip) { alert("Le nom et l'adresse IP sont obligatoires."); return; }
+
+      var r = await api("sondes", "POST", { name: nom, place: lieu, ip_address: ip });
+      if (r && r.ok) {
+        toggleForm("form-sonde");
+        document.getElementById("sonde-nom").value  = "";
+        document.getElementById("sonde-lieu").value = "";
+        document.getElementById("sonde-ip").value   = "";
+        chargerSondes();
+      } else {
+        alert("Erreur : " + (r ? r.error : "Serveur inaccessible."));
+      }
+    }
+
+    async function supprimerSonde(id) {
+      if (!confirm("Supprimer cette sonde ?")) return;
+      await api("sondes", "DELETE", { id: id });
+      chargerSondes();
+    }
+
+
+    // ── UTILISATEURS ──────────────────────────────────────────
+    async function chargerUtilisateurs() {
+      var users = await api("utilisateurs");
+      var wrap  = document.getElementById("table-users");
+
+      if (!users || !users.length) {
+        wrap.innerHTML = "<p class='vide'>Aucun utilisateur.</p>";
+        return;
+      }
+
+      wrap.innerHTML =
+        "<table><thead><tr><th>ID</th><th>Identifiant</th><th>Action</th></tr></thead><tbody>" +
+        users.map(function(u) {
+          return "<tr>" +
+            "<td class='mono'>#" + u.ID_USER + "</td>" +
+            "<td><strong>" + u.username + "</strong></td>" +
+            "<td><button onclick='supprimerUtilisateur(" + u.ID_USER + ", \"" + u.username + "\")'>Supprimer</button></td>" +
+            "</tr>";
+        }).join("") +
+        "</tbody></table>";
+    }
+
+    async function ajouterUtilisateur() {
+      var username = document.getElementById("new-username").value.trim();
+      var password = document.getElementById("new-password").value;
+
+      var r = await api("utilisateurs", "POST", { username: username, password: password });
+      if (r && r.ok) {
+        toggleForm("form-user");
+        document.getElementById("new-username").value = "";
+        document.getElementById("new-password").value = "";
+        chargerUtilisateurs();
+      } else {
+        alert("Erreur : " + (r ? r.error : "Serveur inaccessible."));
+      }
+    }
+
+    async function supprimerUtilisateur(id, username) {
+      if (!confirm("Supprimer le compte \"" + username + "\" ?")) return;
+      var r = await api("utilisateurs", "DELETE", { id: id, username: username });
+      if (r && r.ok) chargerUtilisateurs();
+      else alert("Erreur : " + (r ? r.error : "Serveur inaccessible."));
+    }
+
+
+    // ── DÉCONNEXION ───────────────────────────────────────────
+    async function seDeconnecter() {
+      await api("logout", "POST");
+      window.location = window.location.origin + "/netsentinel/login.html";
+    }
+
+
+    // ── Chargement initial ────────────────────────────────────
+    chargerDashboard();
+
+    // Rafraîchissement automatique toutes les 30 secondes
+    setInterval(chargerDashboard, 30000);
+
+  </script>
+
+</body>
+</html>

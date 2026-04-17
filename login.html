@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>NetSentinel — Connexion</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+  <div class="login-card">
+
+    <div class="login-header">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <polygon points="24,3 45,14 45,34 24,45 3,34 3,14"
+                 stroke="#00e5ff" stroke-width="2" fill="none" opacity=".5"/>
+        <circle cx="24" cy="24" r="6" fill="#00e5ff"/>
+        <line x1="24" y1="3"  x2="24" y2="18" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+        <line x1="24" y1="30" x2="24" y2="45" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+        <line x1="3"  y1="14" x2="18" y2="21" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+        <line x1="30" y1="27" x2="45" y2="34" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+        <line x1="45" y1="14" x2="30" y2="21" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+        <line x1="18" y1="27" x2="3"  y2="34" stroke="#00e5ff" stroke-width="1.5" opacity=".5"/>
+      </svg>
+      <h1>NetSentinel</h1>
+      <p>Supervision réseau — SPARFLEX</p>
+    </div>
+
+    <!-- Message d'erreur, caché par défaut -->
+    <div class="login-error" id="msg-erreur" style="display:none"></div>
+
+    <div class="login-body">
+      <div class="field">
+        <label for="username">Identifiant</label>
+        <input type="text" id="username" placeholder="ex : root" autofocus>
+      </div>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" placeholder="••••••••">
+      </div>
+      <button id="btn" onclick="seConnecter()">Se connecter</button>
+    </div>
+
+    <div class="login-footer">BTS CIEL • Option IR • VIENNE Louis • 2026</div>
+  </div>
+
+  <script>
+    // Touche Entrée = connexion
+    document.getElementById("password").addEventListener("keydown", function(e) {
+      if (e.key === "Enter") seConnecter();
+    });
+
+    async function seConnecter() {
+      var username = document.getElementById("username").value.trim();
+      var password = document.getElementById("password").value;
+      var btn      = document.getElementById("btn");
+      var msgErr   = document.getElementById("msg-erreur");
+
+      // Vérification basique
+      if (!username || !password) {
+        afficherErreur("Remplis les deux champs.");
+        return;
+      }
+
+      // Désactiver le bouton pendant la requête
+      btn.textContent = "Connexion…";
+      btn.disabled    = true;
+      msgErr.style.display = "none";
+
+      // L'URL est construite de façon absolue pour éviter tout problème de chemin.
+      // window.location.origin = "http://192.168.X.X"
+      var urlApi = window.location.origin + "/netsentinel/cgi-bin/api.py?action=login";
+
+      try {
+        var reponse = await fetch(urlApi, {
+          method:  "POST",
+          headers: { "Content-Type": "application/json" },
+          body:    JSON.stringify({ username: username, password: password })
+        });
+
+        // On lit d'abord en texte brut.
+        // Si Apache renvoie une erreur 500, ce ne sera pas du JSON
+        // et on affiche le message directement pour aider au debug.
+        var texte = await reponse.text();
+        var data;
+
+        try {
+          data = JSON.parse(texte);
+        } catch (e) {
+          afficherErreur(
+            "Le serveur a renvoyé une erreur non-JSON.<br>" +
+            "Vérifie les logs Apache : <code>sudo tail -20 /var/log/apache2/error.log</code><br><br>" +
+            "<small>" + texte.substring(0, 400) + "</small>"
+          );
+          btn.textContent = "Se connecter";
+          btn.disabled    = false;
+          return;
+        }
+
+        if (data.ok) {
+          // Connexion réussie → aller sur le dashboard
+          window.location = window.location.origin + "/netsentinel/index.html";
+        } else {
+          afficherErreur(data.error || "Identifiant ou mot de passe incorrect.");
+          btn.textContent = "Se connecter";
+          btn.disabled    = false;
+        }
+
+      } catch (errReseau) {
+        afficherErreur(
+          "Impossible de joindre le serveur.<br>" +
+          "Vérifie qu'Apache est démarré : <code>sudo systemctl status apache2</code>"
+        );
+        btn.textContent = "Se connecter";
+        btn.disabled    = false;
+      }
+    }
+
+    function afficherErreur(msg) {
+      var div = document.getElementById("msg-erreur");
+      div.innerHTML    = "⚠️ " + msg;
+      div.style.display = "block";
+    }
+  </script>
+
+</body>
+</html>
