@@ -32,6 +32,10 @@ conn.executescript("""
         place      TEXT,
         ip_address TEXT
     );
+    CREATE TABLE IF NOT EXISTS SETTINGS (
+        key   TEXT PRIMARY KEY,
+        value TEXT
+    );
 """)
 conn.commit()
 print("Tables vérifiées/créées.")

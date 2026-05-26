@@ -55,10 +55,7 @@
         <div class="card-label">Alertes</div>
         <div class="card-value" id="nb-alertes">–</div>
       </div>
-      <div class="card card-green">
-        <div class="card-label">Sondes configurées</div>
-        <div class="card-value" id="nb-sondes">–</div>
-      </div>
+
       <div class="card card-orange">
         <div class="card-label">Dernière alerte</div>
         <div class="card-value small" id="derniere-alerte">–</div>
@@ -188,6 +185,16 @@
     </div>
 
     <div class="panel">
+      <div class="panel-titre">Alertes email</div>
+      <div class="formulaire" style="flex-direction:column;gap:10px;max-width:400px;padding:15px;">
+        <p style="font-size:0.85em;color:#8ba4bf;margin:0;">Adresse du destinataire</p>
+        <input type="email" id="email-admin" placeholder="Destinataire (ex : admin@sparflex.com)">
+        <button class="btn-primary" onclick="sauvegarderEmail()">Enregistrer</button>
+        <div id="msg-email" style="font-size:0.85em;display:none;"></div>
+      </div>
+    </div>
+
+    <div class="panel">
       <div class="panel-titre">
         Comptes utilisateurs
         <button class="btn-primary" onclick="toggleForm('form-user')">+ Ajouter</button>
@@ -269,8 +276,13 @@
       appareils:  chargerAppareils,
       alertes:    chargerAlertes,
       sondes:     chargerSondes,
-      parametres: chargerUtilisateurs,
+      parametres: chargerParametres,
     };
+
+    async function chargerParametres() {
+      chargerUtilisateurs();
+      chargerEmail();
+    }
 
     function afficherOnglet(nom, bouton) {
       document.querySelectorAll(".onglet").forEach(function(o) { o.classList.remove("active"); });
@@ -293,7 +305,7 @@
 
       document.getElementById("nb-appareils").textContent    = d.appareils;
       document.getElementById("nb-alertes").textContent      = d.alertes;
-      document.getElementById("nb-sondes").textContent       = d.sondes;
+
       document.getElementById("derniere-alerte").textContent =
         d.derniere_alerte
           ? new Date(d.derniere_alerte).toLocaleString("fr-FR")
@@ -533,6 +545,28 @@
       if (!confirm("Supprimer cette sonde ?")) return;
       await api("sondes", "DELETE", { id: id });
       chargerSondes();
+    }
+
+
+    // ── EMAIL ADMIN ───────────────────────────────────────────
+    async function chargerEmail() {
+      var r = await api("settings");
+      if (r) {
+        document.getElementById("email-admin").value = r.email_admin || "";
+      }
+    }
+
+    async function sauvegarderEmail() {
+      var admin = document.getElementById("email-admin").value.trim();
+
+      if (!admin) {
+        afficherMsg("msg-email", "❌ Remplis l'adresse destinataire.", "rouge");
+        return;
+      }
+
+      var r = await api("settings", "POST", { email_admin: admin });
+      if (r && r.ok) afficherMsg("msg-email", "✅ Configuration email enregistrée.", "vert");
+      else           afficherMsg("msg-email", "❌ Erreur lors de l'enregistrement.", "rouge");
     }
 
 

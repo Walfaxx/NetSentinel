@@ -144,9 +144,8 @@ def action_logout():
 def action_dashboard():
     nb_app = db("SELECT COUNT(*) as n FROM DEVICE", one=True)["n"]
     nb_alt = db("SELECT COUNT(*) as n FROM ALERT", one=True)["n"]
-    nb_snd = db("SELECT COUNT(*) as n FROM PROBE", one=True)["n"]
     derniere = db("SELECT date FROM ALERT ORDER BY date DESC LIMIT 1", one=True)
-    json_reponse({"appareils": nb_app, "alertes": nb_alt, "sondes": nb_snd, "derniere_alerte": derniere["date"] if derniere else None})
+    json_reponse({"appareils": nb_app, "alertes": nb_alt, "derniere_alerte": derniere["date"] if derniere else None})
 
 def action_alertes():
     if methode() == "GET": json_reponse(db("SELECT * FROM ALERT ORDER BY date DESC LIMIT ?", (int(param("limit", 50)),)))
@@ -174,6 +173,19 @@ def action_sondes():
         db("DELETE FROM PROBE WHERE id_probe = ?", (body().get("id"),), write=True)
         json_reponse({"ok": True})
 
+def action_settings():
+    if methode() == "GET":
+        rows = db("SELECT key, value FROM SETTINGS WHERE key = 'email_admin'")
+        data = {r["key"]: r["value"] for r in rows}
+        json_reponse(data)
+    elif methode() == "POST":
+        d = body()
+        if "email_admin" in d and d["email_admin"]:
+            valeur = d["email_admin"].strip()
+            db("INSERT INTO SETTINGS (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
+               ("email_admin", valeur, valeur), write=True)
+        json_reponse({"ok": True})
+
 def action_utilisateurs():
     if methode() == "GET": json_reponse(db("SELECT ID_USER, username FROM USER"))
     elif methode() == "POST":
@@ -198,7 +210,8 @@ try:
             routes = {
                 "dashboard": action_dashboard, "alertes": action_alertes,
                 "appareils": action_appareils, "sondes": action_sondes,
-                "utilisateurs": action_utilisateurs, "config_wifi": action_config_wifi,
+                "utilisateurs": action_utilisateurs, "settings": action_settings,
+                "config_wifi": action_config_wifi,
                 "start_scan": action_start_scan, "scan_progress": action_scan_progress
             }
             handler = routes.get(act)

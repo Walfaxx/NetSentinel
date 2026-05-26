@@ -14,6 +14,8 @@ import serial
 import sqlite3
 import os
 import time
+import smtplib
+from email.mime.text import MIMEText
 
 # ------------------------------------------------------------------------------
 # CONFIGURATION
@@ -24,6 +26,49 @@ BAUD_RATE   = 115200
 SCAN_FILE     = "/var/www/html/netsentinel/tmp/netsentinel_scan.txt"
 WIFI_FILE     = "/var/www/html/netsentinel/tmp/netsentinel_wifi.txt"
 PROGRESS_FILE = "/var/www/html/netsentinel/tmp/scan_progress.txt"
+
+# (Configuration email lue depuis la base de données)
+
+
+# ------------------------------------------------------------------------------
+# FONCTION : récupérer une valeur depuis la table SETTINGS
+# ------------------------------------------------------------------------------
+def get_setting(cle):
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cur  = conn.cursor()
+        cur.execute("SELECT value FROM SETTINGS WHERE key = ?", (cle,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row and row[0] else None
+    except Exception:
+        return None
+
+
+# ------------------------------------------------------------------------------
+# FONCTION : envoyer un email d'alerte
+# ------------------------------------------------------------------------------
+def envoyer_email(sujet, message):
+    expediteur   = os.environ.get("GMAIL_SENDER")
+    mot_de_passe = os.environ.get("GMAIL_APP_PASSWORD")
+    destinataire = get_setting("email_admin")
+
+    if not expediteur or not mot_de_passe or not destinataire:
+        print("[EMAIL] Configuration email incomplète — alerte non envoyée.")
+        return
+    try:
+        msg = MIMEText(message, "plain", "utf-8")
+        msg["Subject"] = f"[NetSentinel] {sujet}"
+        msg["From"]    = expediteur
+        msg["To"]      = destinataire
+
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as smtp:
+            smtp.login(expediteur, mot_de_passe)
+            smtp.send_message(msg)
+
+        print(f"[EMAIL] Alerte envoyée à {destinataire} : {sujet}")
+    except Exception as e:
+        print(f"[ERREUR EMAIL] {e}")
 
 
 # ------------------------------------------------------------------------------
@@ -53,6 +98,10 @@ def update_db(ip, mac, hostname):
                 (f"Nouvel appareil détecté : {hostname} ({ip})",)
             )
             print(f"[NOUVEAU] {hostname} ({ip}) — {mac}")
+            envoyer_email(
+                f"Nouvel appareil détecté : {hostname}",
+                f"Un nouvel appareil a été détecté sur le réseau.\n\nHostname : {hostname}\nIP       : {ip}\nMAC      : {mac}"
+            )
 
         conn.commit()
         conn.close()
