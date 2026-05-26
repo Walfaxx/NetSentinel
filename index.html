@@ -7,6 +7,17 @@
 </head>
 <body>
 
+  <!-- Modal scan vuln -->
+  <div id="modal-vuln" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;">
+    <div style="background:#0d1b2a;border:1px solid #1e3a4a;border-radius:10px;width:90%;max-width:800px;max-height:85vh;display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #1e3a4a;">
+        <span style="color:#00e5ff;font-weight:700;font-size:1em;" id="modal-vuln-titre">Scan Nmap</span>
+        <button onclick="fermerModalVuln()" style="background:none;border:none;color:#8ba4bf;font-size:1.3em;cursor:pointer;">✕</button>
+      </div>
+      <div id="modal-vuln-contenu" style="overflow-y:auto;padding:20px;font-size:0.88em;"></div>
+    </div>
+  </div>
+
   <!-- ======================================================
        BARRE DU HAUT
   ====================================================== -->
@@ -375,7 +386,9 @@
               "<button onclick='changerStatut(" + a.id_device + ", " + (a.allowed === 1 ? 0 : 1) + ")'>" +
                 (a.allowed === 1 ? "Révoquer" : "Autoriser") +
               "</button> " +
-              "<button onclick='supprimerAppareil(" + a.id_device + ")'>Supprimer</button>" +
+              "<button onclick='supprimerAppareil(" + a.id_device + ")'>Supprimer</button> " +
+              "<button onclick='ouvrirScanVuln(\"" + (a.ip_address || "") + "\")'>🔍 Scan</button> " +
+              "<button onclick='lancerScanManuel(\"" + (a.ip_address || "") + "\")'>⚡ Scanner</button>" +
             "</td>" +
             "</tr>";
         }).join("") +
@@ -391,6 +404,112 @@
     async function changerStatut(id, allowed) {
       await api("appareils", "POST", { id: id, allowed: allowed });
       chargerAppareils();
+    }
+
+    // ── SCAN VULNÉRABILITÉ ────────────────────────────────────
+    function fermerModalVuln() {
+      document.getElementById("modal-vuln").style.display = "none";
+      if (_vulnPollInterval) { clearInterval(_vulnPollInterval); _vulnPollInterval = null; }
+    }
+
+    var _vulnPollInterval = null;
+
+    async function ouvrirScanVuln(ip) {
+      if (!ip) return;
+      var modal   = document.getElementById("modal-vuln");
+      var titre   = document.getElementById("modal-vuln-titre");
+      var contenu = document.getElementById("modal-vuln-contenu");
+
+      titre.textContent = "Scan Nmap — " + ip;
+      contenu.innerHTML = "<p style='color:#8ba4bf;'>Chargement…</p>";
+      modal.style.display = "flex";
+
+      var r = await api("scan_vuln?ip=" + encodeURIComponent(ip));
+      if (r && r.result !== undefined) {
+        afficherResultatVuln(r, contenu);
+      } else {
+        contenu.innerHTML = "<p style='color:#8ba4bf;'>Aucun scan disponible pour cette IP.</p>";
+      }
+    }
+
+    async function lancerScanManuel(ip) {
+      if (!ip) return;
+      var modal   = document.getElementById("modal-vuln");
+      var titre   = document.getElementById("modal-vuln-titre");
+      var contenu = document.getElementById("modal-vuln-contenu");
+
+      titre.textContent = "Scan Nmap — " + ip;
+      modal.style.display = "flex";
+
+      contenu.innerHTML = "<p style='color:#8ba4bf;margin-bottom:14px;'>Lancement du scan…</p>";
+      await api("scan_vuln", "POST", { ip: ip });
+
+      contenu.innerHTML =
+        "<p style='color:#8ba4bf;margin-bottom:14px;'>Scan en cours (peut prendre plusieurs minutes)…</p>" +
+        "<div style='background:#1e3a4a;border-radius:6px;height:8px;overflow:hidden;'>" +
+          "<div style='height:100%;width:0%;background:#00e5ff;border-radius:6px;" +
+          "animation:vuln-progress 120s linear forwards;'></div>" +
+        "</div>" +
+        "<style>@keyframes vuln-progress{0%{width:0%}90%{width:85%}100%{width:85%}}</style>";
+
+      if (_vulnPollInterval) clearInterval(_vulnPollInterval);
+      _vulnPollInterval = setInterval(async function() {
+        var p = await api("vuln_progress?ip=" + encodeURIComponent(ip));
+        if (p && !p.running) {
+          clearInterval(_vulnPollInterval);
+          _vulnPollInterval = null;
+          var r = await api("scan_vuln?ip=" + encodeURIComponent(ip));
+          if (r && r.result !== undefined) {
+            afficherResultatVuln(r, contenu);
+          } else {
+            contenu.innerHTML = "<p style='color:#8ba4bf;'>Aucun résultat disponible.</p>";
+          }
+        }
+      }, 5000);
+    }
+
+    function afficherResultatVuln(data, contenu) {
+      if (!data.result || !data.result.length) {
+        contenu.innerHTML = "<p style='color:#8ba4bf;'>Aucun port ouvert détecté.</p>" +
+          (data.raw_output ? "<button class='btn-outline' style='margin-top:10px;' onclick='toggleRaw(this)'>Voir sortie complète</button><pre id='raw-output' style='display:none;margin-top:12px;font-size:0.78em;color:#8ba4bf;white-space:pre-wrap;word-break:break-all;background:#080c10;padding:14px;border-radius:6px;max-height:400px;overflow-y:auto;'>" + escapeHtml(data.raw_output) + "</pre>" : "");
+        return;
+      }
+      var html = "<p style='color:#8ba4bf;margin-bottom:12px;'>Scan du " + (data.date || "") + "</p>";
+      html += "<table><thead><tr><th>Port</th><th>Service</th><th>Version</th><th>Vulnérabilités</th></tr></thead><tbody>";
+      data.result.forEach(function(p) {
+        var vulnHtml = "";
+        if (p.vulns && p.vulns.length) {
+          vulnHtml = p.vulns.map(function(v) {
+            return "<a href='https://vulners.com/cve/" + v.cve + "' target='_blank' style='color:#ff4d4d;font-weight:700;text-decoration:none;'>" + v.cve + "</a>" +
+                   (v.details ? "<br><small style='color:#8ba4bf;'>" + v.details.trim() + "</small>" : "");
+          }).join("<br>");
+        } else {
+          vulnHtml = "<span style='color:#4caf50;'>Aucune</span>";
+        }
+        html += "<tr>" +
+          "<td class='mono'>" + p.port + "</td>" +
+          "<td>" + p.service + "</td>" +
+          "<td style='color:#8ba4bf;'>" + (p.version || "–") + "</td>" +
+          "<td>" + vulnHtml + "</td>" +
+          "</tr>";
+      });
+      html += "</tbody></table>";
+      if (data.raw_output) {
+        html += "<button class='btn-outline' style='margin-top:14px;' onclick='toggleRaw(this)'>Voir sortie complète</button>" +
+                "<pre id='raw-output' style='display:none;margin-top:12px;font-size:0.78em;color:#8ba4bf;white-space:pre-wrap;word-break:break-all;background:#080c10;padding:14px;border-radius:6px;max-height:400px;overflow-y:auto;'>" + escapeHtml(data.raw_output) + "</pre>";
+      }
+      contenu.innerHTML = html;
+    }
+
+    function toggleRaw(btn) {
+      var pre = document.getElementById("raw-output");
+      var visible = pre.style.display !== "none";
+      pre.style.display = visible ? "none" : "block";
+      btn.textContent = visible ? "Voir sortie complète" : "Masquer la sortie";
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
     }
 
     async function supprimerAppareil(id) {

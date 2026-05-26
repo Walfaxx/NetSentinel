@@ -15,6 +15,10 @@ import sqlite3
 import os
 import time
 import smtplib
+import subprocess
+import json
+import re
+import threading
 from email.mime.text import MIMEText
 
 # ------------------------------------------------------------------------------
@@ -26,6 +30,8 @@ BAUD_RATE   = 115200
 SCAN_FILE     = "/var/www/html/netsentinel/tmp/netsentinel_scan.txt"
 WIFI_FILE     = "/var/www/html/netsentinel/tmp/netsentinel_wifi.txt"
 PROGRESS_FILE = "/var/www/html/netsentinel/tmp/scan_progress.txt"
+VULN_FILE      = "/var/www/html/netsentinel/tmp/scan_vuln.txt"
+VULN_INTERVAL  = 86400  # secondes entre chaque cycle de scan automatique (24h)
 
 # (Configuration email lue depuis la base de données)
 
@@ -111,6 +117,132 @@ def update_db(ip, mac, hostname):
 
 
 # ------------------------------------------------------------------------------
+# FONCTION : parser la sortie Nmap
+# ------------------------------------------------------------------------------
+def parser_nmap(output):
+    ports = []
+    current_port = None
+    script_lines = []
+
+    for line in output.splitlines():
+        match = re.match(r'^(\d+/\w+)\s+open\s+(\S+)\s*(.*)', line)
+        if match:
+            if current_port is not None:
+                current_port["vulns"] = _extraire_vulns(script_lines)
+                ports.append(current_port)
+            current_port = {
+                "port":    match.group(1),
+                "service": match.group(2),
+                "version": match.group(3).strip(),
+                "vulns":   []
+            }
+            script_lines = []
+        elif current_port and line.startswith("|"):
+            script_lines.append(line.strip())
+
+    if current_port is not None:
+        current_port["vulns"] = _extraire_vulns(script_lines)
+        ports.append(current_port)
+
+    return ports
+
+
+def _extraire_vulns(lines):
+    vulns = []
+    current = None
+    for line in lines:
+        cves = re.findall(r'CVE-\d{4}-\d+', line)
+        for cve in cves:
+            if not any(v["cve"] == cve for v in vulns):
+                current = {"cve": cve, "details": ""}
+                vulns.append(current)
+        if current and ("VULNERABLE" in line or "State:" in line or "Description:" in line):
+            current["details"] += line.lstrip("|_ ") + " "
+    return vulns
+
+
+# ------------------------------------------------------------------------------
+# FONCTION : lancer un scan de vulnérabilité Nmap
+# ------------------------------------------------------------------------------
+def lancer_scan_vuln(ip):
+    print(f"[VULN] Scan Nmap sur {ip}...")
+    try:
+        proc = subprocess.run(
+            ["nmap", "-sV", "--script", "vuln", ip],
+            capture_output=True, text=True, timeout=1800
+        )
+        ports = parser_nmap(proc.stdout)
+        conn = sqlite3.connect(DB_PATH)
+        cur  = conn.cursor()
+        cur.execute(
+            "INSERT INTO SCAN_VULN (ip_address, date, result, raw_output) VALUES (?, datetime('now','localtime'), ?, ?)",
+            (ip, json.dumps(ports), proc.stdout)
+        )
+        conn.commit()
+        conn.close()
+        print(f"[VULN] Scan terminé pour {ip} — {len(ports)} port(s) trouvé(s)")
+
+        ports_vulnerables = [p for p in ports if p.get("vulns")]
+        if ports_vulnerables:
+            details = "\n".join(
+                f"  - {p['port']} ({p['service']} {p['version']}) : " +
+                ", ".join(v["cve"] for v in p["vulns"])
+                for p in ports_vulnerables
+            )
+            message = f"Vulnérabilités détectées sur {ip} :\n\n{details}"
+            conn2 = sqlite3.connect(DB_PATH)
+            conn2.execute(
+                "INSERT INTO ALERT (message, date) VALUES (?, datetime('now','localtime'))",
+                (f"Vulnérabilité détectée sur {ip} ({len(ports_vulnerables)} port(s))",)
+            )
+            conn2.commit()
+            conn2.close()
+            envoyer_email(f"Vulnérabilité détectée sur {ip}", message)
+    except subprocess.TimeoutExpired:
+        print(f"[VULN] Timeout pour {ip}")
+    except Exception as e:
+        print(f"[VULN] Erreur : {e}")
+
+
+# ------------------------------------------------------------------------------
+# FONCTION : scan manuel avec fichier de statut (pour la barre de progression)
+# ------------------------------------------------------------------------------
+def lancer_scan_vuln_manuel(ip):
+    status_file = f"/var/www/html/netsentinel/tmp/vuln_running_{ip.replace('.', '_')}.txt"
+    try:
+        with open(status_file, "w") as f: f.write(ip)
+    except Exception:
+        pass
+    try:
+        lancer_scan_vuln(ip)
+    finally:
+        try: os.remove(status_file)
+        except FileNotFoundError: pass
+
+
+# ------------------------------------------------------------------------------
+# FONCTION : scanner automatiquement tous les appareils en DB
+# ------------------------------------------------------------------------------
+def auto_scan_tous():
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        ips  = [r[0] for r in conn.execute("""
+            SELECT d.ip_address FROM DEVICE d
+            LEFT JOIN SCAN_VULN s ON d.ip_address = s.ip_address
+            WHERE d.ip_address IS NOT NULL AND d.ip_address != ''
+            GROUP BY d.ip_address
+            ORDER BY MAX(s.date) IS NULL DESC, MAX(s.date) ASC
+        """).fetchall()]
+        conn.close()
+        print(f"[AUTO-SCAN] Démarrage — {len(ips)} appareil(s) à scanner")
+        for ip in ips:
+            lancer_scan_vuln(ip)
+        print("[AUTO-SCAN] Cycle terminé")
+    except Exception as e:
+        print(f"[AUTO-SCAN] Erreur : {e}")
+
+
+# ------------------------------------------------------------------------------
 # PROGRAMME PRINCIPAL
 # ------------------------------------------------------------------------------
 print(f"--- Listener NetSentinel démarré sur {SERIAL_PORT} ---")
@@ -125,7 +257,8 @@ try:
     ser.rts      = False
     ser.open()
 
-    esp32_pret = False
+    esp32_pret       = False
+    dernier_scan_vuln = 0
     print("[INIT] En attente que l'ESP32 soit connecté au WiFi...")
 
     while True:
@@ -172,6 +305,8 @@ try:
                     os.remove(PROGRESS_FILE)
                 except FileNotFoundError:
                     pass
+                dernier_scan_vuln = time.time()
+                threading.Thread(target=auto_scan_tous, daemon=True).start()
 
             else:
                 print(f"[ESP32] {line}")
@@ -190,7 +325,24 @@ try:
             except Exception as e:
                 print(f"[ERREUR WIFI] {e}")
 
-        # ── Étape 3 : scan demandé depuis l'interface web ────────────────────
+        # ── Étape 3 : scan manuel depuis l'interface web ─────────────────────
+        if os.path.exists(VULN_FILE):
+            try:
+                with open(VULN_FILE, "r") as f:
+                    ip_vuln = f.read().strip()
+                os.remove(VULN_FILE)
+                if ip_vuln:
+                    threading.Thread(target=lancer_scan_vuln_manuel, args=(ip_vuln,), daemon=True).start()
+            except Exception as e:
+                print(f"[ERREUR VULN MANUEL] {e}")
+
+        # ── Étape 5 : scan automatique de vulnérabilité ──────────────────────
+        if time.time() - dernier_scan_vuln >= VULN_INTERVAL:
+            dernier_scan_vuln = time.time()
+            t = threading.Thread(target=auto_scan_tous, daemon=True)
+            t.start()
+
+        # ── Étape 6 : scan réseau demandé depuis l'interface web ─────────────
         if os.path.exists(SCAN_FILE):
             try:
                 with open(SCAN_FILE, "r") as f:

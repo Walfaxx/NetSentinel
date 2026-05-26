@@ -160,7 +160,11 @@ def action_appareils():
         db("UPDATE DEVICE SET allowed = ? WHERE id_device = ?", (d.get("allowed"), d.get("id")), write=True)
         json_reponse({"ok": True})
     elif methode() == "DELETE":
-        db("DELETE FROM DEVICE WHERE id_device = ?", (body().get("id"),), write=True)
+        d = body()
+        device = db("SELECT ip_address FROM DEVICE WHERE id_device = ?", (d.get("id"),), one=True)
+        if device and device["ip_address"]:
+            db("DELETE FROM SCAN_VULN WHERE ip_address = ?", (device["ip_address"],), write=True)
+        db("DELETE FROM DEVICE WHERE id_device = ?", (d.get("id"),), write=True)
         json_reponse({"ok": True})
 
 def action_sondes():
@@ -185,6 +189,37 @@ def action_settings():
             db("INSERT INTO SETTINGS (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = ?",
                ("email_admin", valeur, valeur), write=True)
         json_reponse({"ok": True})
+
+def action_vuln_progress():
+    ip = param("ip")
+    if not ip:
+        return json_reponse({"running": False})
+    status_file = f"/var/www/html/netsentinel/tmp/vuln_running_{ip.replace('.', '_')}.txt"
+    json_reponse({"running": os.path.exists(status_file)})
+
+def action_scan_vuln():
+    if methode() == "POST":
+        ip = body().get("ip", "").strip()
+        if not ip:
+            return json_reponse({"error": "IP manquante"}, 400)
+        with open("/var/www/html/netsentinel/tmp/scan_vuln.txt", "w") as f:
+            f.write(ip)
+        json_reponse({"ok": True})
+    elif methode() == "GET":
+        ip = param("ip")
+        if not ip:
+            return json_reponse({})
+        row = db(
+            "SELECT id_scan, ip_address, date, result, raw_output FROM SCAN_VULN WHERE ip_address = ? ORDER BY date DESC LIMIT 1",
+            (ip,), one=True
+        )
+        if row:
+            import json as _json
+            try:
+                row["result"] = _json.loads(row["result"])
+            except Exception:
+                row["result"] = []
+        json_reponse(row or {})
 
 def action_utilisateurs():
     if methode() == "GET": json_reponse(db("SELECT ID_USER, username FROM USER"))
@@ -212,7 +247,9 @@ try:
                 "appareils": action_appareils, "sondes": action_sondes,
                 "utilisateurs": action_utilisateurs, "settings": action_settings,
                 "config_wifi": action_config_wifi,
-                "start_scan": action_start_scan, "scan_progress": action_scan_progress
+                "start_scan": action_start_scan, "scan_progress": action_scan_progress,
+                "scan_vuln": action_scan_vuln,
+                "vuln_progress": action_vuln_progress
             }
             handler = routes.get(act)
             if handler: handler()
