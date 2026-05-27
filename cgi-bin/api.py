@@ -205,6 +205,11 @@ def action_scan_vuln():
         with open("/var/www/html/netsentinel/tmp/scan_vuln.txt", "w") as f:
             f.write(ip)
         json_reponse({"ok": True})
+    elif methode() == "DELETE":
+        ip = body().get("ip", "").strip()
+        if ip:
+            db("DELETE FROM SCAN_VULN WHERE ip_address = ?", (ip,), write=True)
+        json_reponse({"ok": True})
     elif methode() == "GET":
         ip = param("ip")
         if not ip:
