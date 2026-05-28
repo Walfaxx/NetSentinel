@@ -26,15 +26,17 @@ conn.executescript("""
         message  TEXT,
         date     DATETIME DEFAULT CURRENT_TIMESTAMP
     );
-    CREATE TABLE IF NOT EXISTS PROBE (
-        id_probe   INTEGER PRIMARY KEY AUTOINCREMENT,
-        name       TEXT NOT NULL,
-        place      TEXT,
-        ip_address TEXT
-    );
     CREATE TABLE IF NOT EXISTS SETTINGS (
         key   TEXT PRIMARY KEY,
         value TEXT
+    );
+    CREATE TABLE IF NOT EXISTS SCAN_VULN (
+        id_scan     INTEGER PRIMARY KEY AUTOINCREMENT,
+        mac_address TEXT,
+        ip_address  TEXT,
+        date        TEXT,
+        result      TEXT,
+        raw_output  TEXT
     );
 """)
 conn.commit()

@@ -345,3 +345,34 @@ input[type="password"]:focus { border-color: var(--accent); }
   .cards { grid-template-columns: repeat(2, 1fr); }
   .onglet { padding: 16px; }
 }
+
+
+/* ── Sondes / ESP32 ──────────────────────────────────────── */
+.panel-accent { border-top:4px solid var(--accent); }
+.esp-grid     { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:15px; }
+.esp-bloc     { display:flex; flex-direction:column; gap:10px; background:#1a1a1a; padding:15px; border-radius:8px; }
+.esp-titre    { margin:0; color:var(--texte); }
+.esp-desc     { font-size:.8em; color:var(--texte2); margin:0; }
+.msg-form     { font-size:.85em; display:none; }
+.form-hidden  { display:none !important; }
+
+/* ── Barre de progression ────────────────────────────────── */
+.progress-wrap  { display:none; margin-top:10px; }
+.progress-label { font-size:.8em; color:var(--texte2); margin-bottom:4px; }
+.progress-track { background:#1a2a3a; border-radius:6px; height:8px; overflow:hidden; }
+.progress-bar   { height:100%; width:0%; background:var(--accent); transition:width .3s; border-radius:6px; }
+@keyframes vuln-progress { 0% { width:0% } 90% { width:85% } 100% { width:85% } }
+.bar-scanning   { animation:vuln-progress 120s linear forwards; }
+
+/* ── Paramètres ──────────────────────────────────────────── */
+.settings-form { display:flex; flex-direction:column; gap:10px; max-width:400px; padding:15px; }
+.settings-desc { font-size:.85em; color:var(--texte2); margin:0; }
+.panel-actions { display:flex; gap:8px; }
+
+/* ── Contenu généré dynamiquement ───────────────────────── */
+.txt-muted        { color:var(--texte2); }
+.txt-ok           { color:#4caf50; }
+.vuln-date        { color:var(--texte2); margin-bottom:12px; }
+.vuln-progress-msg{ color:var(--texte2); margin-bottom:14px; }
+.lien-cve         { color:var(--rouge); font-weight:700; text-decoration:none; }
+.raw-output       { display:none; margin-top:12px; font-size:.78em; color:var(--texte2); white-space:pre-wrap; word-break:break-all; background:var(--bg); padding:14px; border-radius:6px; max-height:400px; overflow-y:auto; }

@@ -1,163 +1,171 @@
-# ==============================================================================
-#  NetSentinel — Installation sur Raspberry Pi avec Apache2
-#  README.txt
-# ==============================================================================
+# NetSentinel
 
-STRUCTURE DES FICHIERS
-──────────────────────
-/var/www/html/netsentinel/
-│
-├── index.html          ← Dashboard principal
-├── login.html          ← Page de connexion
-├── style.css           ← Feuille de styles
-├── netsentinel.db      ← Base de données SQLite
-│
-└── cgi-bin/
-    └── api.py          ← Script Python (lit/écrit la base de données)
+Outil de supervision réseau développé dans le cadre d'un projet BTS CIEL — Option IR pour l'entreprise SPARFLEX (Dizy, 51530).
 
+**Développeur** : VIENNE Louis — Session 2026
 
-INSTALLATION (commandes à taper sur le Raspberry Pi)
-──────────────────────────────────────────────────────
+---
 
-📋 Installation complète — NetSentinel sur Debian / Apache2
-ÉTAPE 1 — Mettre à jour le système
+## Présentation
 
-sudo apt update && sudo apt upgrade -y
+NetSentinel permet de surveiller les appareils connectés sur un réseau local. Une sonde ESP32 effectue des scans réseau (ping sweep + ARP), les résultats sont stockés dans une base SQLite et consultables via une interface web. Des scans de vulnérabilités Nmap sont lancés automatiquement sur les appareils détectés, avec envoi d'alertes par email.
 
-ÉTAPE 2 — Installer Apache2 et Python3
+---
 
-sudo apt install apache2 python3 -y
+## Architecture
 
-sudo apt install python3-werkzeug
+```
+ESP32  ──(USB/série)──  Raspberry Pi  ──(HTTP)──  Navigateur
+         listener.py       Apache2 + CGI         Interface web
+         base SQLite        api.py               index.html
+```
 
-Pour vérifier qu'Apache tourne, ouvre un navigateur sur le réseau et tape l'IP du Raspberry Pi. Tu dois voir la page "Apache2 Debian Default Page".
-Pour connaître l'IP de ton Raspberry :
+- **ESP32** : scan réseau (ICMP ping + ARP), envoie les résultats via port série
+- **Raspberry Pi** : reçoit les données série, stocke en base, lance les scans Nmap, héberge le site
+- **Interface web** : dashboard, inventaire des appareils, alertes, contrôle de la sonde
 
-hostname -I
+---
 
-ÉTAPE 3 — Activer le module CGI d'Apache
-CGI, c'est ce qui permet à Apache d'exécuter des scripts Python au lieu de les afficher comme du texte.
+## Fonctionnalités
 
+- Scan réseau automatique via ESP32 (plage IP configurable)
+- Inventaire des appareils détectés (hostname, IP, MAC, statut)
+- Scan de vulnérabilités Nmap (`-sV --script vuln`) par appareil
+- Scans liés à l'adresse MAC (stable même si l'IP change)
+- Scan automatique quotidien (24h) et après chaque scan réseau
+- Scan manuel par appareil depuis l'interface
+- Alertes en base et envoi d'email (Gmail) à chaque nouvel appareil ou CVE détectée
+- Liens CVE cliquables vers vulners.com
+- Authentification par session HMAC signée
+- Configuration WiFi de l'ESP32 depuis l'interface
+
+---
+
+## Stack technique
+
+| Composant | Technologie |
+|---|---|
+| Microcontrôleur | ESP32 — C++ (Arduino) |
+| Serveur | Raspberry Pi — Python 3 |
+| Web | Apache2 + Python CGI |
+| Base de données | SQLite |
+| Scan vulnérabilités | Nmap |
+| Auth | HMAC-SHA256 (cookie signé) |
+| Frontend | HTML / CSS / JavaScript (vanilla) |
+
+---
+
+## Structure du projet
+
+```
+netsentinel/
+├── listener.py          # Service Python : lecture série ESP32, scans Nmap
+├── init_db.py           # Initialisation de la base de données
+├── index.html           # Interface web (dashboard)
+├── login.html           # Page de connexion
+├── style.css            # Feuille de styles
+├── cgi-bin/
+│   └── api.py           # API REST (CGI)
+└── tmp/                 # Fichiers IPC temporaires (créé au runtime)
+```
+
+---
+
+## Installation
+
+### Prérequis
+
+```bash
+sudo apt install apache2 nmap python3-pip
+pip3 install pyserial werkzeug
+```
+
+Activer le CGI Apache :
+
+```bash
 sudo a2enmod cgid
-
-sudo systemctl restart apache2
-
-ÉTAPE 4 — Créer les dossiers du projet
-
-sudo mkdir -p /var/www/html/netsentinel/cgi-bin
-
-ÉTAPE 5 — Copier les fichiers du projet
-
-sudo cp index.html   /var/www/html/netsentinel/
-
-sudo cp login.html   /var/www/html/netsentinel/
-
-sudo cp style.css    /var/www/html/netsentinel/
-
-sudo cp init_db.py   /var/www/html/netsentinel/
-
-sudo cp cgi-bin/api.py  /var/www/html/netsentinel/cgi-bin/
-
-ÉTAPE 6 — Configurer Apache pour le projet
-Il faut modifier le fichier de configuration d'Apache pour lui dire que le dossier cgi-bin/ contient des scripts Python à exécuter.
-
 sudo nano /etc/apache2/sites-available/000-default.conf
+# Ajouter dans <VirtualHost> :
+#   ScriptAlias /netsentinel/cgi-bin/ /var/www/html/netsentinel/cgi-bin/
+#   <Directory "/var/www/html/netsentinel/cgi-bin">
+#       Options +ExecCGI
+#       AddHandler cgi-script .py
+#   </Directory>
+sudo systemctl restart apache2
+```
 
-Remplace tout le contenu par ceci :
+### Déploiement
 
-apache<VirtualHost *:80>
-    DocumentRoot /var/www/html
-
-    # Dossier du projet NetSentinel
-    <Directory /var/www/html/netsentinel>
-        Options +Indexes
-        AllowOverride None
-        Require all granted
-    </Directory>
-
-    # Dossier CGI : Apache va EXÉCUTER les .py au lieu de les afficher
-    <Directory /var/www/html/netsentinel/cgi-bin>
-        Options +ExecCGI
-        AddHandler cgi-script .py
-        Require all granted
-    </Directory>
-
-    ErrorLog ${APACHE_LOG_DIR}/error.log
-    CustomLog ${APACHE_LOG_DIR}/access.log combined
-</VirtualHost>
-
-Sauvegarde avec Ctrl+O, puis Entrée, puis quitte avec Ctrl+X.
-
-ÉTAPE 7 — Rendre le script Python exécutable
-Apache ne peut exécuter le script que s'il a la permission +x :
-
+```bash
+# Copier les fichiers
+sudo cp -r . /var/www/html/netsentinel/
+sudo mkdir -p /var/www/html/netsentinel/tmp
 sudo chmod +x /var/www/html/netsentinel/cgi-bin/api.py
 
-ÉTAPE 8 — Créer la base de données et le compte admin
+# Initialiser la base
+python3 /var/www/html/netsentinel/init_db.py
 
-cd /var/www/html/netsentinel
+# Créer le service listener
+sudo nano /etc/systemd/system/netsentinel-listener.service
+```
 
-sudo python3 init_db.py
+Contenu du service :
 
-Le script te demande un nom d'utilisateur et un mot de passe — ce sera le compte pour te connecter au site.
-Ensuite, donne les droits sur la base de données à Apache (Apache tourne sous l'utilisateur www-data) :
+```ini
+[Unit]
+Description=NetSentinel Listener ESP32
+After=network.target
 
-# ── Dossier principal ─────────────────────────────────────────
-sudo chown -R www-data:www-data /var/www/html/netsentinel/
-sudo chmod -R 755 /var/www/html/netsentinel/
+[Service]
+ExecStart=/usr/bin/python3 /var/www/html/netsentinel/listener.py
+Restart=always
+RestartSec=5
+Environment="GMAIL_SENDER=votre.adresse@gmail.com"
+Environment="GMAIL_APP_PASSWORD=votre_mot_de_passe_app"
 
-# ── Fichiers HTML et CSS (lecture seule) ──────────────────────
-sudo chmod 644 /var/www/html/netsentinel/index.html
-sudo chmod 644 /var/www/html/netsentinel/login.html
-sudo chmod 644 /var/www/html/netsentinel/style.css
+[Install]
+WantedBy=multi-user.target
+```
 
-# ── Base de données SQLite (lecture + écriture pour Apache) ───
-sudo chown www-data:www-data /var/www/html/netsentinel/netsentinel.db
-sudo chmod 664 /var/www/html/netsentinel/netsentinel.db
+```bash
+sudo systemctl enable netsentinel-listener
+sudo systemctl start netsentinel-listener
+```
 
-# ── Script CGI api.py (exécutable par Apache) ─────────────────
-sudo chown www-data:www-data /var/www/html/netsentinel/cgi-bin/api.py
-sudo chmod 755 /var/www/html/netsentinel/cgi-bin/api.py
+### Migration base existante
 
-# ── listener.py (exécutable par systemd) ─────────────────────
-sudo chown root:root /var/www/html/netsentinel/listener.py
-sudo chmod 755 /var/www/html/netsentinel/listener.py
+Si la base existe déjà sans la colonne `mac_address` dans `SCAN_VULN` :
 
-# ── Dossier cgi-bin ───────────────────────────────────────────
-sudo chown www-data:www-data /var/www/html/netsentinel/cgi-bin/
-sudo chmod 755 /var/www/html/netsentinel/cgi-bin/
+```bash
+sqlite3 /var/www/html/netsentinel/netsentinel.db \
+  "ALTER TABLE SCAN_VULN ADD COLUMN mac_address TEXT;"
+```
 
-# ── Port série USB (accès à l'ESP32) ─────────────────────────
-sudo usermod -a -G dialout www-data
-sudo usermod -a -G dialout root
+---
 
-# ── Fichier temporaire de scan (créé par api.py) ──────────────
-sudo touch /tmp/netsentinel_scan.txt
-sudo chmod 666 /tmp/netsentinel_scan.txt
+## Variables d'environnement
 
-# ── Vérification finale ───────────────────────────────────────
-ls -la /var/www/html/netsentinel/
-ls -la /var/www/html/netsentinel/cgi-bin/
+| Variable | Description |
+|---|---|
+| `GMAIL_SENDER` | Adresse Gmail expéditrice |
+| `GMAIL_APP_PASSWORD` | Mot de passe d'application Gmail |
 
-# ── Redémarrer Apache et le listener ─────────────────────────
-sudo systemctl restart apache2
-sudo systemctl restart netsentinel-listener
+L'adresse du destinataire est configurable depuis l'interface web (onglet Paramètres).
 
-ÉTAPE 9 — Redémarrer Apache
+---
 
-sudo systemctl restart apache2
+## Schema base de données
 
-sudo usermod -a -G dialout www-data
+```
+USER        : ID_USER, username, password
+DEVICE      : id_device, hostname, mac_address, ip_address, allowed
+ALERT       : id_alert, message, date
+SETTINGS    : key, value
+SCAN_VULN   : id_scan, mac_address, ip_address, date, result, raw_output
+```
 
-ÉTAPE 10 — Accéder au site
-Depuis n'importe quel PC du réseau SPARFLEX, ouvre un navigateur et tape :
+---
 
-http://<IP-du-Raspberry>/netsentinel/login.html
+## Accès
 
-En cas de problème — lire les logs d'erreur Apache
-Si tu as une erreur 500 ou une page blanche, c'est ici que tu vois pourquoi :
-
-sudo tail -f /var/log/apache2/error.log
-
-
-
+Interface web : `http://<ip-raspberry>/netsentinel/`
