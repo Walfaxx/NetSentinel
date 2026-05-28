@@ -86,11 +86,11 @@ Activer le CGI Apache :
 sudo a2enmod cgid
 sudo nano /etc/apache2/sites-available/000-default.conf
 # Ajouter dans <VirtualHost> :
-#   ScriptAlias /netsentinel/cgi-bin/ /var/www/html/netsentinel/cgi-bin/
-#   <Directory "/var/www/html/netsentinel/cgi-bin">
-#       Options +ExecCGI
-#       AddHandler cgi-script .py
-#   </Directory>
+   ScriptAlias /netsentinel/cgi-bin/ /var/www/html/netsentinel/cgi-bin/
+   <Directory "/var/www/html/netsentinel/cgi-bin">
+       Options +ExecCGI
+       AddHandler cgi-script .py
+   </Directory>
 sudo systemctl restart apache2
 ```
 
