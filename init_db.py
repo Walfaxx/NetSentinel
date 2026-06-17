@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import sqlite3
 import os
-# On remplace hashlib par werkzeug.security
 from werkzeug.security import generate_password_hash
 
 DB = "/var/www/html/netsentinel/netsentinel.db"
@@ -51,7 +50,6 @@ if conn.execute("SELECT COUNT(*) FROM USER").fetchone()[0] == 0:
     if len(password) < 8:
         print("Erreur : mot de passe trop court.")
     else:
-        # CORRECTION : Utilisation du format compatible avec api.py
         password_hash = generate_password_hash(password)
         
         conn.execute("INSERT INTO USER (username, password) VALUES (?, ?)",
