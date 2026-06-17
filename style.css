@@ -1,7 +1,4 @@
-/* ============================================================
-   NetSentinel — style.css
-   BTS CIEL • SPARFLEX • VIENNE Louis • 2026
-   ============================================================ */
+
 
 @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@600;700&family=Exo+2:wght@300;400;600&display=swap');
 
@@ -24,7 +21,6 @@
   --corps:    'Exo 2', sans-serif;
 }
 
-/* ── Reset ───────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -35,7 +31,6 @@ body {
   min-height: 100vh;
 }
 
-/* Grille de fond subtile */
 body::before {
   content: '';
   position: fixed; inset: 0;
@@ -46,7 +41,6 @@ body::before {
   pointer-events: none;
 }
 
-/* ── En-tête ─────────────────────────────────────────────── */
 header {
   position: sticky; top: 0; z-index: 10;
   background: rgba(8,12,16,.95);
@@ -78,7 +72,6 @@ header {
   font-family: var(--mono); font-size: 12px; color: var(--texte2);
 }
 
-/* ── Navigation ──────────────────────────────────────────── */
 nav {
   display: flex; gap: 2px;
   background: var(--bg2);
@@ -101,11 +94,9 @@ nav {
 .tab:hover  { color: var(--texte); }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-/* ── Onglets ─────────────────────────────────────────────── */
 .onglet { display: none; padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
 .onglet.active { display: block; }
 
-/* ── Cartes de statistiques ──────────────────────────────── */
 .cards {
   display: grid; grid-template-columns: repeat(4, 1fr);
   gap: 16px; margin-bottom: 20px;
@@ -142,7 +133,6 @@ nav {
 .card-red    .card-value { color: var(--rouge); }
 .card-value.small { font-size: 16px; padding-top: 8px; }
 
-/* ── Panneaux ────────────────────────────────────────────── */
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -161,7 +151,6 @@ nav {
   letter-spacing: 2px; text-transform: uppercase;
 }
 
-/* ── Tableaux ────────────────────────────────────────────── */
 table { width: 100%; border-collapse: collapse; }
 
 th {
@@ -192,12 +181,10 @@ tr:hover td { background: rgba(0,229,255,.03); }
 .mono { font-family: var(--mono); font-size: 12px; color: var(--texte2); }
 .vide { padding: 40px; text-align: center; color: var(--texte3); font-family: var(--mono); }
 
-/* ── Badges de statut ────────────────────────────────────── */
 .badge-ok   { padding: 3px 8px; border-radius: 4px; background: rgba(0,255,136,.1); color: var(--vert);   border: 1px solid rgba(0,255,136,.25); font-family: var(--mono); font-size: 10px; }
 .badge-err  { padding: 3px 8px; border-radius: 4px; background: rgba(255,61,113,.1); color: var(--rouge); border: 1px solid rgba(255,61,113,.25); font-family: var(--mono); font-size: 10px; }
 .badge-warn { padding: 3px 8px; border-radius: 4px; background: rgba(255,179,0,.1);  color: var(--orange); border: 1px solid rgba(255,179,0,.25);  font-family: var(--mono); font-size: 10px; }
 
-/* Badge numérique dans la nav */
 .badge {
   display: inline-block;
   background: var(--rouge); color: #fff;
@@ -206,7 +193,6 @@ tr:hover td { background: rgba(0,229,255,.03); }
   margin-left: 4px;
 }
 
-/* ── Alertes ─────────────────────────────────────────────── */
 .alerte {
   display: flex; justify-content: space-between; align-items: flex-start;
   padding: 12px 18px;
@@ -224,7 +210,6 @@ tr:hover td { background: rgba(0,229,255,.03); }
   color: var(--texte3); white-space: nowrap; flex-shrink: 0;
 }
 
-/* ── Boutons ─────────────────────────────────────────────── */
 button {
   padding: 6px 14px;
   font-family: var(--titre);
@@ -244,7 +229,6 @@ button:hover { border-color: var(--accent); color: var(--accent); }
 .btn-danger  { border-color: var(--rouge); color: var(--rouge); background: rgba(255,61,113,.06); }
 .btn-danger:hover { background: rgba(255,61,113,.15); }
 
-/* ── Formulaires ─────────────────────────────────────────── */
 .formulaire {
   display: flex; flex-wrap: wrap; gap: 10px;
   padding: 16px 18px;
@@ -265,7 +249,6 @@ input[type="password"] {
 input[type="text"]:focus,
 input[type="password"]:focus { border-color: var(--accent); }
 
-/* ── Page de connexion ───────────────────────────────────── */
 .login-page {
   min-height: 100vh;
   display: flex; align-items: center; justify-content: center;
@@ -340,14 +323,12 @@ input[type="password"]:focus { border-color: var(--accent); }
   border-top: 1px solid var(--border);
 }
 
-/* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 800px) {
   .cards { grid-template-columns: repeat(2, 1fr); }
   .onglet { padding: 16px; }
 }
 
 
-/* ── Sondes / ESP32 ──────────────────────────────────────── */
 .panel-accent { border-top:4px solid var(--accent); }
 .esp-grid     { display:grid; grid-template-columns:1fr 1fr; gap:20px; padding:15px; }
 .esp-bloc     { display:flex; flex-direction:column; gap:10px; background:#1a1a1a; padding:15px; border-radius:8px; }
@@ -356,7 +337,6 @@ input[type="password"]:focus { border-color: var(--accent); }
 .msg-form     { font-size:.85em; display:none; }
 .form-hidden  { display:none !important; }
 
-/* ── Barre de progression ────────────────────────────────── */
 .progress-wrap  { display:none; margin-top:10px; }
 .progress-label { font-size:.8em; color:var(--texte2); margin-bottom:4px; }
 .progress-track { background:#1a2a3a; border-radius:6px; height:8px; overflow:hidden; }
@@ -364,12 +344,10 @@ input[type="password"]:focus { border-color: var(--accent); }
 @keyframes vuln-progress { 0% { width:0% } 90% { width:85% } 100% { width:85% } }
 .bar-scanning   { animation:vuln-progress 120s linear forwards; }
 
-/* ── Paramètres ──────────────────────────────────────────── */
 .settings-form { display:flex; flex-direction:column; gap:10px; max-width:400px; padding:15px; }
 .settings-desc { font-size:.85em; color:var(--texte2); margin:0; }
 .panel-actions { display:flex; gap:8px; }
 
-/* ── Contenu généré dynamiquement ───────────────────────── */
 .txt-muted        { color:var(--texte2); }
 .txt-ok           { color:#4caf50; }
 .vuln-date        { color:var(--texte2); margin-bottom:12px; }
